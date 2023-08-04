@@ -1,0 +1,20 @@
+# expss.icn
+# Original SNOBOL4 code: Green Book, p. 54
+# Tests: Any(), .|, ||, ??, `v`, Pos(), Rpos()
+
+procedure main()
+   var := Any("xyz")
+   addop    := Any("+-")
+   mulop    := Any("*/")
+   factor   := var .| "(" || `expr` || ")"
+   term     := factor .|  factor || mulop || `term`
+   expr      := addop || term .| term .| term || addop || `expr`
+   p        := Pos(1) || expr || Rpos(0)
+
+   while s := read() do {
+      if ( s ?? p ) then
+   write(s, " is an expression")
+      else
+   write(s, " is not an expression")
+      }
+end

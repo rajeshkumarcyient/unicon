@@ -1,0 +1,12 @@
+# plen.icn
+# Tests: Len(), ||, ??, string concatenation
+
+procedure main()
+   out := &output
+
+   while s := read() do {
+      write(s || ":")
+      s ?? Len(3) -> out
+      s ?? Len(2) -> out || "a"
+      }
+end

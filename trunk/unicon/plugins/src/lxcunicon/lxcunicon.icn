@@ -1,0 +1,217 @@
+#<p>
+#The <tt>LXC</tt> package includes some routines that
+#   facilitate creating and managing lxc containters.
+#
+#
+# Author 
+#         09/29/2016
+#
+
+#<p>
+# <b>Author:</b> Jafar Al-Gharaibeh (<i>to.jafar@gmail.com</i>)
+#</p>
+#<p>
+#  This file is in the <i>public domain</i>.
+#</p>
+package LXC
+
+global LXC
+
+#<p>
+# This is the main LXC plugin class. It holds references to the C functions
+# And also provides utility functions to be used with lxc containers. 
+#<p>
+class LXC : uso::USO (
+    # Variables to hold C functions references
+    LXCCreate, 
+    LXCStart,
+    LXCAttach,
+    LXCReboot,
+    LXCShutdown,  # gracefull shutdown
+    LXCStop, 	  # shutdown but force stop if necessary
+    LXCDestroy,
+    LXCState,
+    LXCExist,
+    LXCFreeze,
+    LXCUnfreeze,
+    LXCClone,
+    LXCRename,
+    LXCInit,
+    # 
+    vernum,
+    ark,
+    errorTable
+    )
+
+   #
+   # Check whether a container exists
+   # <[param name the name of the container]>
+   #
+   method exist(name:string)
+      return LXCExist(name)
+   end
+
+   #
+   # Create a container
+   # <[param name the name of the container
+   #
+   method container(name:string)
+      return LXContainer(name)
+   end
+
+   #
+   # Return the version of the underlying lxc library
+   #
+   method version()
+      return vernum
+   end
+
+   #
+   # Return the architecture of the current system
+   #
+   method arch()
+      return ark
+   end
+
+   method init()
+      return LXCInit()
+   end
+
+   initially(path)
+       # Load the shared library and setup the various function references to C
+      /path	   :="lxcunicon.so"
+      ((LXCCreate  := loadfunc(path, "create")),
+      (LXCStart    := loadfunc(path, "start")),
+      (LXCAttach    := loadfunc(path, "attach")),
+      (LXCShutdown := loadfunc(path, "shutdown")),
+      (LXCReboot := loadfunc(path, "reboot")),
+      (LXCStop 	   := loadfunc(path, "stop")),
+      (LXCFreeze   := loadfunc(path, "freeze")),
+      (LXCUnfreeze := loadfunc(path, "unfreeze")),
+      #(LXCClone   := loadfunc(path, "clone")),
+      #(LXCRename  := loadfunc(path, "Rename")),
+      (LXCDestroy  := loadfunc(path, "destroy")),
+      (LXCState    := loadfunc(path, "state")),
+      (LXCExist    := loadfunc(path, "exist")),
+      (LXCInit     := loadfunc(path, "lxcinit"))) |
+         stop("can't load LXC library from ", image(path))
+      
+      errorTable := table()
+      LXC := self
+      vernum := LXC.LXCInit()
+      
+      # The default architecture 
+      /ark := (&features ?(="Arch " & 
+            (if ="x86_" then
+               if ="32" then
+                  "i386"
+              else
+                  "amd64"
+            else if ="arm_" then
+               if ="32" then
+                  "armhf"
+               else
+                  "arm64")))
+      
+end
+
+class LXContainer(
+            name,
+            dist,
+            release,
+            arch,
+            handle,
+            lasterrorcode
+		  )
+   #
+   # Create an lxc container
+   # <[param d the OS distribution of the container]>
+   # <[param r the desired release]>
+   # <[param a the desired architecture]>
+   # Example
+   #    c.creat("ubuntu", "trusty", "amd64")
+   #    c.creat("fedora", "22", "i386")
+   #
+   method creat(d:string:&null, r:string:&null, a:string:&null)
+      dist := \d; release := \r; arch := \a
+      return handle := LXC.LXCCreate(name, dist, release, arch)
+   end
+
+   #
+   # Check whether this container exists (created already)
+   #   
+   method exist()
+      return handle := LXC.LXCExist(name)
+   end
+
+   #
+   # Start/boot the container
+   #      
+   method start()
+      /handle := name
+      return handle := LXC.LXCStart(handle)
+   end
+
+   #
+   # Perform an attach operation on the container and execute the list of  
+   # commands in args
+   # <[param arg command arguments to pass to the container]>
+   # <[param stdi file to use as a standard input]>
+   # <[param stdo file to use as a standard output]>
+   # <[param stde file to use as a standard error]>
+   #   
+   method attach(arg:string, stdi, stdo, stde)
+      string(arg) & (arg || " X")
+      return LXC.LXCAttach(handle, arg, stdi, stdo, stde)
+   end
+
+   #
+   # Reboot the container
+   #
+
+   method reboot()
+      return LXC.LXCReboot(handle)
+   end
+
+   #
+   # Report the state of the container
+   #
+
+   method state()
+      return LXC.LXCState(handle)
+   end
+
+   #
+   # Shutdown the container
+   # <[param timeout time to wait before forcing a shudtown]>
+   #
+
+   method shutdown(timeout:30)
+      return LXC.LXCShutdown(handle, timeout)
+   end
+
+   #
+   # Stop the container
+   # <[param timeout time to wait before forcing a stop]>
+   #
+
+   method stop(timeout:30)
+      return LXC.LXCStop(handle, timeout)
+   end
+
+   #
+   # Remove the container completely from the system
+   #
+   method destroy()
+      return LXC.LXCDestroy(handle)
+   end
+
+   initially
+      initial \LXC | LXC()
+      # set the defaults to some common values
+      \name | stop("A container must have a name")
+      /dist := "ubuntu"
+      /release := "xenial"
+      # use a default arch that matches the current Unicon binaries
+      /arch := LXC.arch()
+ end

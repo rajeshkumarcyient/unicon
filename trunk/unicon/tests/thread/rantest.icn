@@ -1,0 +1,43 @@
+#
+# rantest.icn -- random numbers test
+#
+
+global thrd
+
+procedure main(argv)
+   if not (&features == "concurrent threads") then
+      stop("This program requires concurrent threads.")
+
+   thrd:=[]
+
+   if *argv>0 then
+      n:=integer(argv[1]) | stop ("arg must be integer")
+    else
+       n:=4
+   
+   every i:= !n do put(thrd, thread talloc())
+    every write( <<@!thrd )
+end
+
+procedure talloc()
+   static mtx
+   initial{
+      mtx := mutex()
+      }
+
+   seed := serial()
+   str := ""
+   every i := !10 do{
+      critical mtx:{
+         &random := seed
+         x:= ?100
+         seed := &random
+         }
+         
+      str ||:=  x || " "
+      }
+
+   # queue the result in the outbox for &main to pickup
+   "Thread " ||  serial()-1 || " rand " || str @>> 
+end
+    

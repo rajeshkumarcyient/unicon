@@ -1,0 +1,58 @@
+# Makedefs for language level source code
+OS=@unicon_os@
+OSDIST=@unicon_osdist@
+OSREL=@unicon_osrel@
+
+EXE=@EXE@
+GRAPHICS=@GRAPHICS@
+BITS=@BITS@
+
+UDBTOOLS=@UDBTOOLS@
+UNIPROGS=@UNIPROGS@
+
+DASHG=@DASHG@
+SHELL = /bin/sh
+
+UNI=$(BASE)/uni
+BIN=$(BASE)/bin
+RM=rm -f
+RMDIR=rm -rf
+MKDIR=mkdir
+CP=cp
+TOUCH=touch
+ARC=zip
+ARCEXT=zip
+
+UNICON=$(BIN)/unicon
+UC=$(UNICON)
+ICONT=$(BIN)/icont
+IYACC=$(BASE)/uni/iyacc/iyacc
+
+UNIDEP=$(UNI)/unidep/unidep
+UNIDOC=$(UNI)/unidoc/unidoc
+
+ICON_IPL=$(BASE)/ipl
+
+UFLAGS=-s
+
+%$(EXE): %.u
+	$(UNICON) $<
+
+%.u: %.icn
+	$(UNICON) $(UFLAGS) -c $<
+
+.NOTPARALLEL:
+
+WUNICONTARGET=@WUNICONTARGET@
+ICONXEXE=@ICONXEXE@
+WICONXEXE=@WICONXEXE@
+ICONTEXE=@ICONTEXE@
+WICONTEXE=@WICONTEXE@
+UNICONEXE=@UNICONEXE@
+WUNICONEXE=@WUNICONEXE@
+ICONCEXE=@ICONCEXE@
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+bindir=@bindir@
+libdir=@libdir@
