@@ -1,0 +1,14 @@
+# fish.icn - print word before fourth "fish".
+# Test generator resumption of patterns
+# Tests: Break(), ||, ->, ??, Span(), literals
+
+procedure main()
+   wrdpat := Break(&letters) || Span(&letters) -> word
+   p := wrdpat || Span(" ") || "fish"
+
+   while s := read() do {
+      n := 0
+      every (s ?? p)\4 do n +:= 1
+      n = 4 & write("Matched: '", word, "' in ", s)
+      }
+end

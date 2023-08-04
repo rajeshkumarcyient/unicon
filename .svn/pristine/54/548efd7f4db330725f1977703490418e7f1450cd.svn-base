@@ -1,0 +1,7 @@
+# pairss.icn
+# Tests: Len(), =>, ||, `c`, ->, ??
+procedure main()
+   out := &output
+   pair  := (Len(1) => x || `x`) -> out
+   while (line := read()) ?? pair
+end

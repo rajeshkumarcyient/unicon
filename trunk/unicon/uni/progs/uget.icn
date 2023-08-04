@@ -1,0 +1,113 @@
+#
+# uget.icn - Unicon version of wget.
+#
+# Authors: Phillip Thomas and Jafar Al-Gharaibeh
+#
+# Date: July 2018
+#
+
+link basename
+link options
+
+procedure usage()
+    prog := basename(&progname)
+    write("Usage: ", prog, " [options] <URL>\n")
+    write(prog, " is a unicon utility for downlaoding files from the web. It supports")
+    write("HTTP and HTTPS. If the protocol is not specified in the URL it defaults to HTTP,")
+    write("(i,e unicon.org is equivalent to http://unicon.org)\n")
+    write("Options:")
+    write("\t -n : no https certificate verification")
+    write("\t -o : overwrite existing file")
+    write("\t -v : verbose output")
+    write("\t -s : show http server response only, don't save the file")
+    write("\t -p : print the content to the console, don't save to file")
+    write("\t -r : maximum allowed redirects. Default to 3")
+    write("\t -f : filename to save to. Default to the url filename")
+    write("\t -h : show this help\n")
+
+    exit(-1)
+end
+
+procedure main(args)
+    local opts, url, web, fname, mode, redirect
+    opts := options(args, "novshpr+f:")
+    url := args[1] | usage()
+
+    # check whether to verify certificates or not
+    if \opts["n"] then
+	mode := "m-" # don't verify https certificates 
+    else
+	mode := "m"
+
+    redirect := \opts["r"] | 3
+
+    url ? proto := map(tab(many(&letters)))
+
+    if not (\proto == ("http" | "https")) then 
+	url := (proto := "http") || "://" || url 
+    
+    if proto == "https" then
+	if not (&features == "secure sockets layer encryption") then
+	    stop("This Unicon build does not support https")  
+
+    fname := \opts["f"] | basename(url)
+    if fname == "" then
+	    fname := basename(url[1:-1]) # drop the trailing slash
+
+    # try to open the url, loop to follow redirects if applicable
+    repeat {
+	web := &null
+	web := open(url, mode) | stop("open(", image(url), ") error: ", &errortext )
+
+	\web | stop("can't open(", url,")")
+	    
+	if \opts["v"] | \opts["s"] then
+	    showheaders(web)
+	
+	# if this is a redirect then follow it
+	if web["Status-Code"] = 301 & redirect > 0 then {
+	    url := web["Location"]
+	    /opts["v"] | write(left("Redirect", 16), ": ", image(url))
+	    close(web)
+	    redirect-:=1
+	}
+	else
+	    break
+    }
+
+    # make sure the response was OK
+    if web["Status-Code"] ~= 200 then {
+	c := web["Status-Code"]
+	p := web["Reason-Phrase"]
+	close(web)
+	stop("Server response: ", c, " ", p)
+    }
+
+    # if we are printing headers only then we are done, otherwise save the file
+    if /opts["h"] then {
+	# save to file or print to screen
+	if /opts["p"] then {
+	    write("saving to file ", fname)
+	    if stat(fname) & /opts["o"] then
+		close(web) &
+		stop("file already exists, use -o to overwrite or -f for a new filename")
+	    fout := open(fname, "w") | stop("open(",image(fname), ") error: ", &errortext)
+	}
+	
+	size := integer(web["Content-Length"])
+	/opts["v"] | write("file size: ", size, " bytes")
+	t := &time
+	line := reads(web, size) | stop("reads(",image(web),") error: ", &errortext)
+	write(fout, line)
+	close(\fout)
+	/opts["v"] | write("time: ", &time-t)
+
+    }
+    close(web)
+end
+
+procedure showheaders(web)
+    write("---------- Server Response --------------")
+    every write(left(k:=key(\web), 16), ": ", web[k])
+    write("-----------------------------------------")
+end

@@ -1,0 +1,47 @@
+#
+# $Id: contenttype.icn,v 1.2 2006-07-10 13:43:32 rparlett Exp $
+#
+
+package mail
+
+import util
+
+#
+# This class represents a content type
+#
+class ContentType:ContentDisposition(subtype)
+   #
+   # Set subtype subtype
+   #
+   method set_subtype(s)
+      self.subtype := s
+   end
+
+   #
+   # Get the subtype
+   #
+   method get_subtype()
+      return subtype
+   end
+
+
+   method parse(s)
+      local p := mail::RFC822Parser()
+      return p.parse_content_type(s, self) | error(p)
+   end   
+
+   method to_rfc1521()
+      return type || "/" || subtype || rfc1521_parameters()
+   end
+
+   # can inherit initially() from superclass once initially-w-parameters 
+   # inheritance bug is fixed, i.e. not yet.
+
+   initially(a[])
+      parameters := ClTable()
+      if (*a = 1) & (::type(a[1]) == "string") then {
+	 parse(a[1]) | fail
+	 }
+end
+
+

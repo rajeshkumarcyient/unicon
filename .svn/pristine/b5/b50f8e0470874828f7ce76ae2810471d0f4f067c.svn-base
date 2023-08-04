@@ -1,0 +1,116 @@
+#
+# paths.icn - procedures for manipulating IPATH/LPATH
+#
+# Author: Clinton Jeffery
+#
+
+# link to older IPL module for actual executable path search routine
+link getpaths
+
+#
+# pathsep() returns the sentinel value that separates elements of the path.
+# extra care is needed (on non-Windows systems) when space appears in a
+# pathname, since space is the path separator for many shells.
+#
+procedure pathsep()
+   return getenv("PATHSEP") | ";"
+end
+
+# return the top level unicon directory
+procedure ulibprefix()
+   static prefix
+   local path, f
+   initial  {
+      if path := (&features ? (="Libraries at " & tab(upto(';') | 0))) then
+         prefix := path || "/"
+      else if (path := (&features ? (="Binaries at " & tab(0)))) |
+         ((f := open((path := getpaths()) || ("iconx"|"iconx.exe"| "wiconx.exe"))))
+      then {
+         close(\f)
+         prefix := path || "../"
+         }
+      }
+   return prefix
+end
+
+# unicon library paths
+procedure ulibpaths()
+   static libpath
+   local prefix, sep
+   initial {
+      sep := pathsep()
+      prefix := ulibprefix()
+      libpath :=
+	  prefix || "ipl/lib"     || sep ||
+	  prefix || "uni/lib"     || sep ||
+	  prefix || "uni/gui"     || sep ||
+	  prefix || "uni/xml"     || sep ||
+	  prefix || "uni/parser"  || sep ||
+	  prefix || "uni/3d"      || sep ||
+	  prefix || "plugins/lib" || sep
+      }
+   return libpath
+end
+
+procedure ipaths()
+    static pathstr
+    initial
+       pathstr :=  ulibpaths() || (getenv("IPATH") | ".")
+   return pathstr
+end
+
+procedure lpaths()
+static pathstr
+local sep, prefix
+   initial {
+      sep := pathsep()
+      prefix := ulibprefix()
+
+      pathstr := ulibpaths()
+      
+      pathstr ||:=
+         prefix || "/ipl/incl"  || sep ||
+         prefix || "/ipl/gincl" || sep ||
+         prefix || "/ipl/mincl" || sep
+
+      if \iconc then 
+         pathstr ||:=
+            prefix || "/ipl/procs"  || sep ||
+            prefix || "/ipl/gprocs" || sep ||
+            prefix || "/ipl/gprogs" || sep
+      
+      pathstr ||:= (getenv("LPATH") | ".")
+      }
+   return pathstr
+end
+
+
+procedure paths_get(path, sep)
+   local pathstr, rslt
+   rslt := []
+   pathstr := path
+   /sep := pathsep()
+   if \pathstr ~== "" then {
+      pathstr ? {
+         while put(rslt, tab(find(sep))) do
+            tab(many('; \t'))
+         put(rslt, tab(0))
+         }
+      }
+   return rslt
+end
+
+procedure ipaths_get()
+   static rslt
+   initial 
+      rslt := paths_get(ipaths())
+   return rslt
+end
+
+procedure lpaths_get()
+   static rslt
+   initial 
+      rslt := paths_get(lpaths())
+   return rslt
+end
+

@@ -1,0 +1,11 @@
+The test should crash with a run time error now.
+You should see only one runtime error message. Any repetition
+of the error message indicates a problem in the threads system.
+
+Run-time error 102
+File error.icn; Line 12
+numeric expected
+offending value: &null
+Traceback:
+   main(list_1 = [])
+   {1 + &null} from line 12 in error.icn

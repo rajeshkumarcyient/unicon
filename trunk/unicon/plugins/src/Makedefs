@@ -1,0 +1,48 @@
+
+include $(BASE)/Makedefs
+
+UNI=$(BASE)/uni
+IPL=$(BASE)/ipl
+
+LIBD=$(BASE)/plugins/lib
+
+UC=$(TDIR)/bin/unicon
+WUC=$(TDIR)/bin/unicon -G
+UFLAGS=-s -u -c
+
+CFDYN2= $(CFDYN)
+
+.SUFFIXES: .c .$(O)
+
+all:	   default
+
+# target lib
+TLIB = $(LNAME).$(SO)
+
+# Each dynamic library should have two rules
+
+# library
+$(LNAME): $(TLIB) $(LIBD)/$(LNAME).u
+	cp  $(TLIB) $(LIBD)/
+
+$(TLIB): $(COBJ)
+	$(CC) $(CFDYN2) -o $(TLIB) $(COBJ) ../../lib/icall.$(O) $(MYLIBS) $(XLIBS)
+	cp $(TLIB) $(LIBD)
+	
+# Unicon interface
+$(LIBD)/%.u: %.icn  $(TLIB)
+	cp $< $(LIBD)/
+	cd $(LIBD); $(UC) $(UFLAGS) $< uso.u
+	rm $(LIBD)/$<
+
+%.o: %.c
+	$(CC) $(CFDYN2) -c $<
+
+zip:
+	 zip $(LNAME).zip Makefile *.icn *.c *.h
+
+clean:
+	$(RM) *.u *.o *.$(SO)  uniclass.* *~
+	$(RM) $(LIBD)/$(LNAME).u  $(LIBD)/$(LNAME).$(SO)
+
+

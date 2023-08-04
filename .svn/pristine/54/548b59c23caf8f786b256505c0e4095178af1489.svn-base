@@ -1,0 +1,258 @@
+package util
+
+#
+# A Connectable is an object that is capable of sending events to objects
+# that want to be informed when something of interest happens. Generally it
+# is an object to which other objects may connect for info. In the GUI classes
+# for example, every component is a Connectable and those of them that
+# actually receive input are probably connected to by some object.  The
+# Connectable informs its subscribers of an event via its fire() method,
+# which generally calls one of their methods as specified when they connected.
+#
+# In many Connectable architectures there is only one listener so a list of
+# listeners is overkill. On the other hand, there are other connectable
+# architectures where a central Connectable is managing large numbers of
+# relationships. So Connectable is all about scalability. The code promotes
+# on demand down the following list of representations (it does not demote).
+#
+# 0  listeners: listeners is &null to begin with. Many connectables will
+#    have no listener.
+# 1  listener: listeners is the Subscription object. This is common in GUIs.
+# 2+ listeners, all the same type: listeners is a list
+# 2+ listeners, different types: listeners is a table of lists, keyed by type
+#
+class Connectable(listeners)
+   method genlisteners(typ)
+      case type(listeners) of {
+	 "table": suspend !\(listeners[typ])
+	 "list": every x := !listeners do
+		    if x.type === typ then suspend x
+	 default: if (\listeners).type === typ then return listeners
+	 }
+   end
+
+   #
+   # Helper method to create and fire an Event object from the given parameters.
+   #
+   method fire(typ, param)
+      local e, l
+
+      e := Notification(self, typ, param)
+      every l := genlisteners(\typ|&null) do {
+	 case type(l.obj) of {
+	    "procedure" | "string" | "integer": {
+	       suspend l.obj(self, typ, param)
+	       }
+	    # list invocation here uses substitution rules per future UniLib
+	    # integration.  This probably won't work well until that happens.
+	    "list": {
+	       a := copy(l.obj)
+	       fcn := pop(a)
+	       args := [self, typ, param]
+	       every i := 1 to *a do if a[i] === Arg then a[i] := pop(args)
+	       suspend fcn ! a
+	       }
+	    "co-expression": {
+	       args := [self, typ, param]
+	       while suspend args @ l.obj
+	       }
+	    default: {
+	       l.meth(l.obj, e)
+	       }
+	    }
+	 }
+      return e
+   end
+
+   #
+   # Create and connect a Subscription to this object.
+   # @return the Subscription created and added.
+   #
+   method connect(obj, meth, typ)
+      local l, p, sum
+
+      p := lang::find_method(obj, meth) | stop("No such method ", meth)
+
+      # omit duplicate requests
+      every l := genlisteners(typ) do
+	 if (l.obj === obj) & (l.meth === p) then
+	    fail
+
+      l := Subscription(obj, p, typ)
+
+      if /listeners then return listeners := l
+
+      else if type(listeners) ~== "list" & type(listeners) ~== "table" then
+	 listeners := [listeners] # promote to list and continue
+
+      if type(listeners) == "list" then {
+	 if (!listeners).type ~=== typ then {
+	    T := table()
+	    every x := !listeners do {
+	       /T[x.type] := []
+	       put(T[x.type], x)
+	       }
+	    listeners := T # promote to table and continue
+	    }
+	 else { put(listeners, l); return l }
+	 }
+
+      /listeners[typ] := []
+      put(listeners[typ], l)
+
+      return l
+   end
+
+   method disconnect_fromlist(L, obj)
+      local elem, newL := []
+      every elem := !L do if elem.obj ~=== obj then put(newL, elem)
+      return newL
+   end
+
+   #
+   # Remove all {Subscription}s with the given object field.
+   #
+   method disconnect_all(obj)
+      local k, t, l
+
+      if type(listeners) == "table" then {
+	 every k := key(listeners) do
+	    listeners[k] := disconnect_fromlist(listeners[k], obj)
+	 }
+      else if type(listeners) == "list" then
+	 listeners := disconnect_fromlist(listeners, obj)
+
+      else if type(listeners) == "Subscription" then
+	 if listeners.obj === obj then listeners := &null
+
+   end
+
+   #
+   # Remove a Subscription previously returned by {connect}
+   #
+   method disconnect(l)
+      local k := l.type, t
+
+      if l === listeners then listeners := &null
+
+      t := []
+
+      if type(listeners) == "list" then {
+	 every put(t, l ~=== !listeners)
+	 listeners := t
+	 }
+      else if type(listeners) == "table" then {
+	 every put(t, l ~=== !listeners[k])
+	 listeners[k] := t
+	 }
+   end
+
+   #
+   # Wampler Notifier API.  Not yet tested here; caveat emptor. No, really.
+   # Beyond this pointe there be Dragons.
+   #
+
+   #<p>
+   #  Adds a listener to this class, can be called with one, two, or three
+   #     arguments.
+   #</p>
+   #<pre>
+   #    1 argument:
+   #      1 - Listener class, callback procedure, or co-expression
+   #    2-3 arguments:
+   #      1 - an identifier for the type of the callback (default
+   #             is the string "default")
+   #      2 - Listener class,  callback procedure, or co-expression
+   #      3 - Name of callback method (defaults to "callback")
+   #</pre>
+   #<p>
+   #  The callback method is normally invoked with arguments
+   #     (self, message), but subclasses of Notifier may change this.
+   #</p>
+   method addListener(tag, listener, methodname)
+      if /listener then {
+	 listener := tag
+	 tag := "default"
+	 }
+      /methodname := "callback"
+      connect(listener, methodname, tag)
+   end
+
+   #<p>
+   # Remove a listener.  Same arguments as addListener.
+   #   Removes all occurences of tag/listener/methodname.
+   #   <[fails if tag/listener/methodname not present]>
+   #</p>
+   method removeListener(tag, listener, methodname)
+      every l := genlisteners(tag) do
+	 if (l.obj === listener) &
+	    (l.meth === lang::find_method(listener, methodname)) then
+	    disconnect(l)
+   end
+
+   #<p>
+   #  Removes all listeners with the specified tag (defaults to "default")
+   #</p>
+   method removeListeners(tag:"default")
+      case type(listeners) of {
+	 "table": delete(listeners, tag)
+	 "list": while (x := !listeners).type === tag do delete(listeners,x)
+         default: if (\listeners).type === tag then listeners := &null
+	 }
+   end
+
+   #<p>
+   #  Remove all listeners regardless of their tags
+   #</p>
+   method removeAllListeners()
+      listeners := &null
+   end
+
+   #<p>
+   #  Notifies all callbacks with the given tag.  If a callback is
+   #     a procedure (or a string) it is called with
+   #        <name>(self, message),
+   #     if it is a co-expression it is called with
+   #        [self, message] @ <name>,
+   #     if it is a class, then an attempt is made to invoke the
+   #        callback method as <name>.<method>(self, message).
+   #</p>
+   method notify(tag:"default", message:"")
+      every l := genlisteners(tag) do notify1(l, message)
+   end
+   method notify1(l, message)
+      case type(l.obj) of {
+	 "procedure" | "string" : l.obj(message)
+	 "co-expression" : [ , message] @ l.obj
+	 default: l.meth(l.obj, message)
+	 }
+   end
+
+   #<p>
+   #  Invoke a callback method from a Listener subclass.
+   #  (Actually, works with any subclass of Object, provided
+   #  the attach was done with addListener.)
+   #</p>
+   #<p>
+   # <b>This method is intended for internal use, but can be
+   #  overridden by subclasses that want to invoke callback
+   #  Listener subclasses with different arguments.</b>
+   #</p>
+   method notifyClass(lRec, message)
+      stop("notifyClass not yet implemented")
+   end
+
+   #<p>
+   #  behaves like notify, but notifies all listeners, regardless
+   #     of their tags.
+   #</p>
+   method notifyAll(message)
+      case type(listeners) of {
+	 "table": every notify1(!!listeners, message)
+	 "list": every notify1(!listeners, message)
+         default: notify1(\listeners)
+	 }
+   end
+
+initially
+end

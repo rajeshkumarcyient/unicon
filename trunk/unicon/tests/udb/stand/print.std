@@ -1,0 +1,225 @@
+   UDB Version 2.1, July 4, 2018.
+   
+   printme : loaded 9020 of 64-bit Uncompressed Icode
+   1 file is found
+   Type "help" for assistance or "src" for file(s) name
+(udb) 
+   Breakpoint #1 (enabled) at printme.icn:29
+(udb)    Starting program:  printme
+
+[New co-expression 1]
+[New co-expression 2]
+
+   Breakpoint #1 (enabled) at printme.icn:29
+     29:     test(1, 2, 3)
+(udb) 
+   The command "print " is incomplete.
+   Try "help" or "help print" for assistance.
+(udb) 
+   Global variables:
+     and = 1 : integer
+     me = "myself" : string
+(udb) 
+   Local variables:
+     L = list_1(4) : list
+     L2 = list_2(2) : list
+     S = set_1(3) : set
+     T = table_1(2) : table
+     a = record complex_1(2) : complex
+     b = record complex_2(2) : complex
+     c = &null : null
+     co = co-expression_2(0) : co-expression
+     e = object example_1(3) : example__state
+     f = file(printfile.tst) : file
+     p = pattern_19(9) = Pos(1) || Span('a') .> a || Span('b') .> b || Span('c') .> c || Rpos(0) || `test(a, b, c)` : pattern
+     prt1 = &null : null
+     prt10 = &null : null
+     prt2 = &null : null
+     prt3 = &null : null
+     prt4 = &null : null
+     prt5 = &null : null
+     prt6 = &null : null
+     prt7 = &null : null
+     prt8 = &null : null
+     prt9 = &null : null
+(udb)    Stepping.
+
+   file printme.icn, line 47.
+   46:procedure test(one, two, three)
+-->47:    return 0
+   48:end
+(udb) 
+   Parameters:
+     one = 1 : integer
+     three = 3 : integer
+     two = 2 : integer
+(udb) 
+   The variable "T" is not within the current frame.
+(udb)    Stepping.
+
+   Breakpoint #1 (enabled) at printme.icn:29
+     29:     test(1, 2, 3)
+
+   file printme.icn, line 42.
+   41:
+-->42:    "aabbcc" ?? p
+   43:    
+(udb) 
+   prt1 = 1
+(udb) 
+   prt1 = 10
+(udb) 
+   prt1 = 10
+(udb) 
+   prt2 = 3.14159
+(udb) 
+   prt3 = -7
+(udb) 
+   prt4 = -3.14159
+(udb) 
+   prt5 = 12345678901234567890
+(udb) 
+   prt6 = -12345678901234567890
+(udb) 
+   prt7 = 'a'
+(udb) 
+   prt8 = 'abc'
+(udb) 
+   prt9 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+(udb) 
+   Invalid right-hand expression "prt 8".
+(udb) 
+   prt9 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+(udb) 
+   The string subscript "90" is out of range.
+(udb) 
+   Strings cannot have double subscripts.
+(udb) 
+   prt10 = &null
+(udb) 
+   prt10 = "This is the string that I want to print."
+(udb) 
+   *prt10 = 40
+(udb) 
+   prt10[1:5] = "This"
+(udb) 
+   prt10 = "insertastring is the string that I want to print."
+(udb) 
+   f = file(printfile.tst)
+(udb) 
+   e = example_1 := example()
+   example_1.a := 1
+   example_1.b := 2
+   example_1.c := 3
+(udb) 
+   e.a = 1
+(udb) 
+   co = co-expression_2(0)
+(udb) 
+   T = T1 := table(&null)
+   T1["goodbye"] := "goodbye"
+   T1["hello"] := "hiya"
+(udb) 
+   !T = { "hiya", "goodbye" }
+(udb) 
+   T["goodbye"] = "goodbye"
+(udb) 
+   T = "First"
+(udb) 
+   T["None"] = &null
+(udb) 
+   L = L1 := list(4)
+   L1[1] := "linux"
+   L1[2] := 2.0
+   L1[3] := 'abc'
+   L1[4] := pattern_2(2) = Any('a') || Any('a')
+(udb) 
+   !L = { "linux", 2.0, 'abc', pattern_2(2) = Any('a') || Any('a') }
+(udb) 
+   L[1] = "linux"
+(udb) 
+   The list subscript "10" is out of range.
+(udb) 
+   The list subscript "10" is out of range.
+(udb) 
+   a = R_complex_1 := complex()
+   R_complex_1.re := 0
+   R_complex_1.im := 0
+(udb) 
+   b = R_complex_2 := complex()
+   R_complex_2.re := 1
+   R_complex_2.im := -1
+(udb) 
+   a.im = 0
+(udb) 
+   b.im = -1
+(udb) 
+   b = 4.5
+(udb) 
+   S = S1 := set()
+   insert(S1,52)
+   insert(S1,"rock lobster")
+   insert(S1,'B')
+(udb) 
+   !S = { 52, "rock lobster", 'B' }
+(udb) 
+   p = pattern_19(9) = Pos(1) || Span('a') .> a || Span('b') .> b || Span('c') .> c || Rpos(0) || `test(a, b, c)`
+(udb) 
+   Cursor position matched at pos:1
+   Pat: Pos(1) || Span('a') .> a || Span('b') .> b || Span('c') .> c || Rpos(...
+        ......^
+
+   ?? at printme.icn:42, matched 1:3 out of string length 6
+   Sub: aabbcc
+        ..^
+   Pat: Pos(1) || Span('a') .> a || Span('b') .> b || Span('c') .> c || Rpos(...
+                  .........^
+(udb) 
+   Sub: aabbcc
+        ..^
+
+   Pat: Pos(1) || ==> Span('a') <== .> a || Span('b') .> b || Span('c') .> c || Rpos(0) || `test((temp), (temp), (temp))`
+(udb) 
+   Pat: Pos(1) || ==> Span('a') <== .> a || Span('b') .> b || Span('c') .> c || Rpos(0) || `test((temp), (temp), (temp))`
+(udb) 
+   Sub: aabbcc
+        ..^
+(udb)    Stepping.
+
+   file printme.icn, line 46.
+   45:
+-->46:procedure test(one, two, three)
+   47:    return 0
+(udb) 
+   &pos = 7
+(udb) 
+   &subject = "aabbcc"
+(udb) 
+   &features = "UNIX"
+(udb) 
+   &allocated = 
+   Total Allocations= 0 Byte(s)
+   --String Region  = 0 Byte(s)
+   --Block  Region  = 0 Byte(s)
+(udb) 
+   &collections = 
+   Total Garbage Collections  = 0 Byte(s)
+   --String Region = 0 times(s)
+   --Block  Region = 0 times(s)
+(udb) 
+   &progname = "printme"
+(udb) 
+   &file = "printme.icn"
+(udb) 
+   &col = 0
+(udb) 
+   &row = 0
+(udb) 
+   &eventcode = &null
+(udb) 
+   &eventvalue = &null
+(udb) received "quit", quitting
+
+   The program "printme" is running.  Exit anyhow (Y/n)?: 
+   Thank you for using UDB.
+   Goodbye !!!

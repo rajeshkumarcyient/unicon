@@ -1,0 +1,225 @@
+#
+# evaluator.icn: Handles the main Runtime Monitoring facilities
+# Author:	 Ziad Al-Sharif, zsharif@gmail.com
+# Contributor:	 Gigi Young
+#
+
+$include "evdefs.icn"
+$include "defaults.icn"
+$include "patdefs.icn"
+
+link evinit
+link image
+link ximage
+link getpaths
+link evnames
+
+global ESource
+global es_flag # eventsource flag (OWN | MONITORED)
+
+#
+# Contains the core of the udb debugging facilities 
+#
+class Evaluator(
+   Break,       # An object of the BreakPoint() class 
+   Watch,       # An object of the WatchkPoint() class 
+   Frame,       # An object of the Stack() class
+   Print,       # An object of the Data() class
+   Step,        # An object of the Stepping() class
+   Trace,       # An object of the Tracing() class
+   Internal,    # An object of the Internals() class
+   External,    # An object of the Externals() class
+   DTA,         # an object of the TempAssert() class
+   DState,      # An object of the State() class
+   
+   BuiltIns,    # A table that maps eventcodes to their methods 
+   
+   Message      # a string formated with the current message
+   )
+
+#
+# This was adapted from the evaltree.icn unicon library
+# for the needs of the udb debugging facilities. 
+#
+method startEvaluator()
+   local obj, eventMask, valueMask
+
+   DState.coState.init(MONITORED)
+   while EvGet(DState.eventMask, DState.valueMask) do {
+
+      case &eventcode of {
+        E_Line: {
+          if *DState.breakMask > 0  then { Break.checkBreakpoint() }
+          if DState.RunCode = NEXT  then { Step.checkNext()        }
+          if DState.RunCode = STEP  then { Step.checkStep()        }
+          if DState.RunCode = PSTEP then { Step.checkStep()        }  
+          }
+        E_Assign | E_Value: {
+          # check for Watch point on changed vars & keywords
+          if *DState.watchChangeMask > 0  then Watch.checkWatchChange()
+          }
+        E_Deref: {
+          # check for Watch point on read vars & keywords
+          if *DState.watchReadMask   > 0  then Watch.checkWatchRead()
+          }
+        E_Spos | E_Snew:{
+          if *DState.watchChangeMask > 0  then Watch.checkWatchScan()
+          }
+        E_PatAttempt | E_PelemMatch | E_PelemFail | E_PelemAttempt:{
+          if DState.RunCode = PSTEP then{ Step.checkPStep()       }
+          }
+        E_PatMatch | E_PatFail:{
+          Step.pEnd()
+          }
+        E_PatPush | E_PatPop | E_PatVal:{
+                                Step.handle_PatStack() }
+
+        # Coexp created, add to list of coexps
+        E_CoCreate: { 
+           # parent is current coexp
+           DState.addCoexp(&eventvalue)
+           #DState.coState.add_coexp(&eventvalue,DState.coState.get_curr())
+           }
+
+        # Coexp activated, set current coexp to value
+        E_Coact: { 
+           DState.updateCoState(&eventvalue)
+           write("[Activating co-expression ",DState.coState.curr.id,"]")
+           }
+        # Coexp failed to produce result, remove from list of coexps
+        E_Cofail: { 
+           write("[Co-expression ",DState.coState.curr.id," failed]")
+           DState.removeCoexp()
+           DState.updateCoState(&eventvalue)
+           write("[Returning to co-expression ",DState.coState.curr.id,"]")
+           }
+        # Coexp returned, set current coexp to value
+        E_Coret: { 
+           DState.updateCoState(&eventvalue)
+           write("[Returning to co-expression ",DState.coState.curr.id,"]")
+           }
+
+        E_Exit:               { handle_Exit()     }
+        E_Error:              { handle_Error()    }
+        E_Signal:             { handle_Signals()  }
+        } # end of case ecode
+
+      # Tracing Features 
+      if *DState.traceMask > 0 then{
+         if member(DState.traceMask, &eventcode) then 
+            Trace.checkTraceBehavior()
+         }
+
+      # Internal Extension Agents 
+      if Internal.enabled > 0 then{
+         every obj := !Internal.activeClients do 
+            if member(obj.eventMask, &eventcode) then 
+               obj.Forward()
+         }
+
+      # External Extension Agents  
+      if External.enabled > 0 then
+         External.Forward()
+
+      # Temporal Assertions
+      if *DTA.assertTable > 0 then  DTA.forward()
+
+      if DState.State = PAUSE then
+         suspend
+      else if DState.State = END then 
+         return 
+      }
+end
+
+#
+# Handles UDB's E_Line Event
+#
+method handle_Stepping()
+
+   if *DState.breakMask > 0 then { Break.checkBreakpoint() }
+   if DState.RunCode = NEXT then { Step.checkNext()        }
+   if DState.RunCode = STEP then { Step.checkStep()        }
+end
+
+#
+# Handles UDB's E_Exit Events
+#
+method handle_Exit()
+   DState.State := END
+end
+
+#
+# Handles UDB's E_Error Events and prints the RunTime error Messages
+#
+method handle_Error()
+   local cur_line, cur_file, cur_p, src
+
+   DState.State   := PAUSE
+   #DState.State   := END
+   DState.RunCode := ERROR
+
+   cur_file := keyword("file", MONITORED) | "?"
+   cur_line := keyword("line", MONITORED) | "?"
+   #cur_p := "2"#image(image(proc(MONITORED, 0 ))) | "OPS!!"
+   Message := "\nRun-time error " ||keyword("errornumber",MONITORED)||
+              "\nFile "||cur_file||
+              "; Line "||cur_line||"; Col "||keyword("column",MONITORED)
+   Message ||:="\n"||DState.srcFile.getSrcLine(cur_file, cur_line)
+   Message ||:="\n"||repl("-", keyword("column",MONITORED))||"^"
+   Message ||:="\n"||keyword("errortext",MONITORED)
+   DState.Write(Message)
+end
+
+#
+# Handles UDB's E_Signal Event
+#
+method handle_Signals()
+   DState.State   := PAUSE
+   DState.RunCode := SIGNAL
+end
+
+#
+# initializes the evaluator main loop functionalities
+#
+method initEvaluator()
+
+   BuiltIns[E_Line]   := self.__m.handle_Stepping
+
+   #Evaluator_handle_WatchChange
+   BuiltIns[E_Assign] := self.__s.Watch.__m.checkWatchChange
+   BuiltIns[E_Value]  := self.__s.Watch.__m.checkWatchChange
+
+   #Evaluator_handle_WatchRead
+   BuiltIns[E_Deref]  := self.__s.Watch.__m.checkWatchRead 
+
+   #Evaluator_handle_StringScanning
+   BuiltIns[E_Spos]   := self.__s.Watch.__m.checkWatchScan
+   BuiltIns[E_Snew]   := self.__s.Watch.__m.checkWatchScan
+
+   BuiltIns[E_Exit]   := self.__m.handle_Exit
+
+   BuiltIns[E_Error]  := self.__m.handle_Error
+
+   BuiltIns[E_Signal] := self.__m.handle_Signals
+end
+
+#
+# Initialization
+#
+initially()
+
+   Break    := BreakPoint()    # The breakpoints techniques
+   Watch    := WatchPoint()    # The watching points techniques
+   Frame    := Stack()         # The stack and frames related techniques
+   Print    := Data()          # The printing techbiques
+   Step     := Stepping()      # The stepping and continuing Techniques
+   Trace    := Tracing()       # The Dynamic Tracing Techniques
+   Internal := Internals()     # The Internal monitors and/or visualizers 
+   External := Externals()     # The External monitors with co-expression switch
+   DTA      := TempAssert()    # The Dynamic Temporal Assertions
+
+   BuiltIns := table()         # The main loop of the evaluator table
+   initEvaluator()             # Initialize the builtIns Evaluator Table
+
+   Message  := ""
+end

@@ -1,0 +1,31 @@
+# bigpss.icn
+# Original SNOBOL code: Green Book,  p. 53
+# Find largest number and word in a string.
+# Tests: `p`, =>, ||, Fail(), deferred function
+#         variables, Span(), Fail(), ??
+
+procedure gt(t,p)
+   return *p < *t
+end
+
+global try
+
+procedure main()
+   local big
+
+   if /big then big := ""
+   bigp := ( `p` => try || `gt(try, big)`) => big || Fail()
+
+   while str := read() do {
+      write("String: ", str)
+      p   := Span(&digits ++ ',')
+      big := ""
+      str ?? bigp
+      write("Largest number is: ", big)
+
+      p   := Span(&letters)
+      big := ""
+      str ?? bigp
+      write("Largest word is: ", big)
+      }
+end

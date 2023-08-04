@@ -1,0 +1,6 @@
+. (directory) permissions drwxr-xr-x
+.. (directory)
+a (file) permissions -rw-r--r-- size        0
+b (file) permissions -rw-r--r-- size        0
+c (file) permissions -rw-r--r-- size        0
+d (symbolic link) -> a

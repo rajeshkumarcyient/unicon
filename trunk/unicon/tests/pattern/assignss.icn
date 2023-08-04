@@ -1,0 +1,15 @@
+# assignss.icn - test assignments to substrings
+# Original SNOBOL4 code: Green Book, p. 39 bottom of page.
+# Tests: Break(), ->, Span(), ??, pattern_match(),
+#        pattern_match := <replacement>
+
+# Expected output:
+# actinium:ac:89:227*:1899:debierne
+
+procedure main()
+   p := Break(" ") -> chars || Span(" ")
+   while s := read() do {
+      every pattern_match(s,p) := chars || ":" 
+      write(s)
+      }
+end

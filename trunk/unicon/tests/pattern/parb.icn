@@ -1,0 +1,10 @@
+# parb.icn
+# Tests: ??, ->, ||, Arb(), string literals
+
+procedure main()
+   out := &output
+   while s := read() do {
+      s ?? "a" || Arb() -> out || "a"
+      s ?? "t" || Arb() -> out || "mm"
+      }
+end

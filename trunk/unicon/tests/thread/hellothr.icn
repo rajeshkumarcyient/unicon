@@ -1,0 +1,24 @@
+#
+# Author: Jafar Al-Gharaibeh
+# Date 12/31/2010
+#
+# Very simple threads example. Create two hello world threads and finish. 
+#
+procedure main()
+   if not (&features == "concurrent threads") then
+      stop("This program requires concurrent threads.")
+
+   write("Create two threads..")
+   a := thread print(1)
+   b := thread print(2)
+
+   # wait for the two threads
+   write(<<@a)
+   write(<<@b)
+   
+   write("The process ended successfully, exiting now..")
+end
+
+procedure print(id)
+   ("Hello world! I'm thread " || id || " I will finish now.") @>>
+end

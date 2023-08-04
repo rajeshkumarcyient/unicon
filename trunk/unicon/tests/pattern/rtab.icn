@@ -1,0 +1,24 @@
+### Paden Rumsey
+### rtab.icn
+### test Rtab() on a variety of inputs
+
+## Tests Rtab by increasing the size of the tab from the right. This results
+## in a decreasing string that is matched by Rtab() and a greater remaining
+
+procedure main()
+    
+    while input := read() do {
+      inputSize := *input 	    
+      while inputSize >= 0 do {	    
+          tabsize := (*input - inputSize )
+          pat := Rtab(tabsize) -> out || Rem() -> remain
+	  input ?? pat
+          write_output(out, remain)
+          inputSize -:= 1
+          }
+      }
+end
+
+procedure write_output(out, remainder)
+    write("The match by Rtab is: " || out || " and remainder is: " || remainder)
+end

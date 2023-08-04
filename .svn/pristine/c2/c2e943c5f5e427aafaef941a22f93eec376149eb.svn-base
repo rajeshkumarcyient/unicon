@@ -1,0 +1,23 @@
+# nspantst.icn
+#
+# At the moment this is just the Nspan() edition of ABCss.icn.
+# Is the empty string a valid a^nb^nc^n ?
+#
+# Todo: extend to a more comprehensive unit test of Nspan().
+#
+# Tests: Pos(), Span(), .>, Rpos() `proc()`
+
+procedure test(a,b,c)
+   return ((a - 1)  = (b - a)) & ((a - 1) = (c - b))
+end
+
+procedure main()
+   p := Pos(1) || Nspan("a") || .> a || Nspan("b") || .> b ||
+       Nspan("c") || .> c || Rpos(0) && `test(a,b,c)`
+
+   while line := read() do {
+      if line ?? p
+      then write(line, " accepted") 
+      else write(line, " rejected")
+      }
+end

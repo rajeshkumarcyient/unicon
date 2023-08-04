@@ -1,0 +1,82 @@
+############################################################################
+#
+#	File:     mapbit.icn
+#
+#	Subject:  Procedures to map string into bit representation
+#
+#	Author:   Ralph E. Griswold & Don Ward
+#
+#	Date:     December 5, 1995  & April 2017
+#
+############################################################################
+#
+#   This file is in the public domain.
+#
+############################################################################
+#
+#     The procedure mapbit(s) produces a string of zeros and ones
+#  corresponding to the bit patterns for the characters of s.  For
+#  example, mapbit("Axe") produces "010000010111100001100101".
+#
+############################################################################
+#
+#  Links: strings
+#
+############################################################################
+
+############################################################################
+#      Don Ward
+#      April 2017
+# This version is faster and has O(n) performance.
+############################################################################
+
+procedure mapbit(s)
+    static bits, B
+    local x
+    initial {
+        bits := create((0 to 1) || (0 to 1) || (0 to 1) || (0 to 1) ||
+                       (0 to 1) || (0 to 1) || (0 to 1) || (0 to 1))
+        B := table() # B is a map from char to bitstring representation.
+        every B[!&cset] := @bits
+    }
+    x := ""
+    every x ||:= B[!s]
+    return x
+end
+
+############################################################################
+#
+# This is the (renamed) original, which works without using a co-expression.
+#
+############################################################################
+link strings
+
+procedure bilit(text,alpha,first,second)
+   return collate(map(text,alpha,first),map(text,alpha,second))
+end
+
+procedure mapbit_nocoexpr(s)
+   static all, base16, hex1, hex2, quad1, quad2, pair1, pair2
+
+   #  The following is a bit ornate, but then ... .  It could be
+   #  made more compact (and cryptic) by using lists of templates
+   #  and parameterizing the initialization.
+
+   initial {
+      all := string(&cset)
+      base16 := "0123456789ABCDEF"
+      hex1 := ""
+      every hex1 ||:= repl(!base16,16)
+      hex2 := repl(base16,16)
+      quad1 := ""
+      every quad1 ||:= repl(!left(base16,4),4)
+      quad2 := repl(left(base16,4),4)
+      pair1 := ""
+      every pair1 ||:= repl(!left(base16,2),2)
+      pair2 := repl(left(base16,2),2)
+      }
+
+   s := bilit(bilit(bilit(s,all,hex1,hex2),base16,quad1,quad2),left(base16,4),
+           pair1,pair2)
+   return s
+end

@@ -1,0 +1,461 @@
+#
+# state.icn:   Handles the main debugging state properties
+# Author:      Ziad Al-Sharif, zsharif@gmail.com
+# Contributor: Gigi Young
+#
+
+$include "evdefs.icn"
+$include "defaults.icn"
+
+#
+# This class is used to handle the current debugging state of UDB 
+#
+class State(
+   TP,              # TargetProgram and its arguments
+
+   State,           # Debugging state such RUN, PAUSE, etc
+   RunCode,         # It is one of the RUNNING States (RUN|CONTINUE|SPEP|NEXT)
+   RunCount,        # integer counts number of runs a program has in a session
+
+   MaskTable,       # a table that maps eventcodes into their value masks
+   eventMask,       # the cset of the main evaluator set of event codes 
+   valueMask,       # table used for breakpoints and watchpoints set of masks
+   breakMask,       # a set of the E_Line values that we like to break on
+   watchChangeMask, # a set of the E_Assign values that we like to watch
+   watchReadMask,   # a set of the E_Deref values that we like to watch
+   internalMask,    # The cset of the active internals event mask
+   externalMask,    # The cset of the active externals event mask   
+   traceMask,       # a cset of &eventcode(s) of wanted traced fetures
+
+   assertEventMask, # a cset of the active temporal assertions event masks
+   assertVars,      # a set with all assertions' variables
+   assertLoc,       # a set with all line numbers that has assertions on them
+
+   cur_Frame,       # points at the last investigated frame, using up,down,frame
+
+   Message,         # a string formated with the current message
+
+   srcFile,         # an instance of the SourceFile class
+   icode,           # an instance of the Icode class
+   coState,         # an instance of CoexpState class
+   cmdHistory       # list keeps all of the UDB's cmd Session History
+   )
+
+#
+# prints a message out into a console, message box, and so
+#
+method Write(Msg)
+
+   /Msg := Message
+   write(Msg)
+   Message := ""
+end
+
+#
+# prints a message out into a console, message box, and so
+#
+method Writes(Msg)
+
+   /Msg := Message
+   writes(Msg)
+   Message := ""
+end
+
+#
+# check if the current command is valid
+#
+method isValidCommand(cmd)
+
+   if State = (LOAD | PAUSE | END) then
+      return
+   else{
+      State := ERROR
+      Message   := "\n   No Program is Loaded_
+                    \n   Type \"help "||cmd[1]||"\" for assistance"
+      Write(Message)
+      fail
+      }
+end
+
+#
+# constructs/reconstructs the monitoring/debugging event-mask & value-mask
+#
+method constructEventMask()
+   local x
+
+   ## write("----> state.icn: re-constructing all of event mask and value mask")
+   if *internalMask >0 | *externalMask >0    | 
+      *traceMask >0    | *assertEventMask >0 then{
+      eventMask := cset(E_CoCreate || E_Coact || E_Cofail || E_Coret ||
+			E_Error || E_Exit || E_Signal || E_MXevent ||
+			E_Collect || E_EndCollect) ++
+                   internalMask ++ externalMask ++ traceMask ++ assertEventMask
+      if *breakMask > 0 | *assertEventMask > 0 then{
+         if member(traceMask,E_Line)    |
+            member(internalMask,E_Line) | member(externalMask,E_Line) then
+            delete(valueMask,E_Line)
+         else{
+            eventMask ++:= cset(E_Line) 
+            valueMask[E_Line] := breakMask ++ assertLoc
+            }
+         }
+      if *watchChangeMask > 0 then{
+         if member(traceMask,E_Assign)    |
+            member(internalMask,E_Assign) | member(externalMask,E_Assign) then
+            delete(valueMask,E_Assign)
+         else{
+            eventMask ++:= cset(E_Assign || E_Value) #??? temp
+            valueMask[E_Assign] := watchChangeMask
+            }
+         }
+      if *watchReadMask > 0 then{
+         if member(traceMask,E_Deref)    |
+            member(internalMask,E_Deref) | member(externalMask,E_Deref) then
+            delete(valueMask,E_Deref)
+         else{
+            eventMask ++:= cset(E_Deref)
+            valueMask[E_Deref] := watchReadMask
+            }
+         }
+      if *assertEventMask > 0 then{
+         if member(traceMask,E_Deref)    |
+            member(internalMask,E_Deref) | member(externalMask,E_Deref) then
+            delete(valueMask,E_Deref)
+         else{
+            #write("OK, Iam here with E_Assign and E_Deref")
+            #write(ximage(assertVars))
+            eventMask ++:= assertEventMask #cset(E_Deref || E_Assign || E_Value)
+            valueMask[E_Deref]  := assertVars
+            valueMask[E_Assign] := assertVars
+            }
+         }
+
+      }
+   else{ # *internalMask = 0 & *externalMask = 0 & *traceMask = 0
+      eventMask := cset(E_Error || E_Exit || E_Signal ||
+			E_CoCreate || E_Coact || E_Cofail || E_Coret ||
+			E_Collect || E_EndCollect)
+      if *breakMask > 0 then {
+         eventMask ++:= cset(E_Line)
+         valueMask[E_Line] := breakMask
+         }
+      if *watchChangeMask > 0 then {
+         if member(watchChangeMask, "&pos") then
+            eventMask ++:= cset(E_Spos)
+         if member(watchChangeMask, "&subject") then
+            eventMask ++:= cset(E_Snew)
+         eventMask ++:= cset(E_Assign || E_Value) # ??? temp
+         valueMask[E_Assign] := watchChangeMask
+         }
+
+      if *watchReadMask > 0 then{
+         eventMask ++:= cset(E_Deref)
+         valueMask[E_Deref] := watchReadMask
+         }
+      }
+
+      # debug the agent mask
+      #write("------[state.icn: eventMask]------")
+      #every x := !eventMask do
+      #   write("-->",evnames(x))
+end
+
+#
+# Update the debug state 
+# cmd =("run" | "rerun" | "continue" | "step" | "next"| "fresh" | "break")
+# enable/disable -internal/external,
+#  
+method Update(state)
+
+   if /state then state := State else  State := state
+   case state of {
+     LOAD :{
+          #write("\n   --- a program just loaded ---") 
+          }
+     RUN  |
+     RERUN:{
+        RunCount +:= 1
+	# maybe should unconditionally set RunCode := RUN here
+	if RunCode === SIGNAL then RunCode := RUN
+        constructEventMask()
+        } 
+     PAUSE   |
+     CONTINUE:{
+        constructEventMask()
+        }
+     STEP |
+     NEXT :{
+        #State := state
+        if not member(eventMask, E_Line) then eventMask ++:= cset(E_Line)
+        if \valueMask[E_Line] then            delete(valueMask, E_Line)
+        eventMask ++:= internalMask ++ externalMask
+        }
+     PSTEP :{
+        if not member(eventMask, E_Line) then eventMask ++:= cset(E_Line)
+        if \valueMask[E_Line] then             delete(valueMask, E_Line)
+        if not member(eventMask, E_PatAttempt) then eventMask ++:=
+                                               cset(E_PatAttempt)
+        if \valueMask[E_PatAttempt] then       delete(valueMask, E_PatAttempt)
+	if not member(eventMask, E_PelemAttempt) then eventMask ++:=
+                                               cset(E_PelemAttempt)
+        if \valueMask[E_PelemAttempt] then     delete(valueMask, E_PelemAttempt)
+	if not member(eventMask, E_PatMatch) then eventMask ++:=
+					       cset(E_PatMatch)
+	if \valueMask[E_PatMatch] then         delete(valueMask, E_PatMatch)
+        if not member(eventMask, E_PatFail)  then eventMask ++:= cset(E_PatFail)
+        if \valueMask[E_PatFail] then             delete(valueMask, E_PatFail)
+        if not member(eventMask, E_PelemMatch) then eventMask ++:=
+	                                       cset(E_PelemMatch)
+	if \valueMask[E_PelemMatch] then       delete(valueMask, E_PelemMatch)
+        if not member(eventMask, E_PelemFail) then eventMask ++:=
+	                                       cset(E_PelemFail)
+        if \valueMask[E_PelemFail] then        delete(valueMask, E_PelemFail)
+        if not member(eventMask, E_PatVal) then eventMask ++:= cset(E_PatVal)
+        if \valueMask[E_PatValue] then        delete(valueMask, E_PatVal)
+        if not member(eventMask, E_PatPush) then eventMask ++:= cset(E_PatPush)
+        if \valueMask[E_PatPush] then        delete(valueMask, E_PatPush)
+        if not member(eventMask, E_PatPop) then eventMask ++:= cset(E_PatPop)
+        if \valueMask[E_PatPop] then        delete(valueMask, E_PatPop)
+        eventMask ++:= internalMask ++ externalMask
+        }
+     default:{
+        #Write("OPs: Start Over !!!")
+        Fresh()
+        }
+     }
+end
+
+#
+# Initialize the UDB Debugging State
+#
+# Returns if debugging data needs to be reinitialized, otherwise fails
+#
+method initializeState(tp)
+   local x, src, found, missing, plural:="", missing_files, reset := 0
+
+   # This is only when the TP is passed at the start of udb, i.e: ./udb test
+   # in either case the ErrorCode will be initialized
+   if State ~= PAUSE then State := NONE
+
+   # load (no program loaded)
+   if *(\tp) = 0 & *TP = 0 then {
+      State := ERROR
+      Message ||:= "\n   A program must be pre-loaded_
+                    \n   Type \"help\" for assistance"
+      RunCode := NONE
+      Write(Message)
+      }
+   # load | load args | udb | udb args 
+   # reload current program or load new program
+   else if *(\tp) > 0 | *TP > 0 then {
+      # if a program is running, check for user input
+      if State = PAUSE then {
+         Message  :="\n   The current program's debugging session is active."
+         Message||:="\n   The session will be terminated in order to load "
+         Message||:="\n   a program. Proceed (Y/n)?: "
+         Writes(Message)
+
+         until (ans := read()) == (""|"y"|"n"|"Y"|"N"|"yes"|"no"|"Yes"|"No") do
+            write("\n   Invalid input, please try again (Y/n): ")
+
+         # no, don't load 
+         if ans == ("n"|"N"|"no"|"No") then {
+            State := SKIP
+            fail
+            }
+         # yes, restart session then reinitialize
+         else {
+            # Exit out of this run of startSession()
+            State := RELOAD 
+
+            # renew TP if loading new program
+            if *tp > 0 & *TP > 0 then {
+               TP := tp
+               reinitState()
+               #Fresh() # reloading, refresh state
+               }
+            }
+         }
+      # program not running (in debug session)
+      else { # State ~= PAUSE
+         # a program is already loaded, clear out loaded files
+         if *TP > 0 then {
+            # reinit source info
+            reinitState()
+            }
+         # load new program, reset TP
+         if *(\tp) > 0 then 
+            TP := tp
+
+         # check if the TP is loadable and accessable.
+$ifndef _UNIX
+         if not stat(TP[1]) & stat(TP[1]||".exe") then
+            TP[1]||:=".exe"
+$endif
+         if stat(TP[1]) then {
+
+            # start loading
+            EvInit(TP) | stop("cant start evinit on " || TP[1])
+            if src := icode.getSrcFileNames(TP[1]) then {
+
+               State := LOAD
+               srcFile.loadSourceFiles(TP[1], src)
+               #-- Automated TEST
+$ifdef TEST
+               State := RUN ###### TEST : For the sake of getting the Time right
+$endif
+               Message ||:= "\n   "|| srcFile.exeName ||" : loaded "||
+                            srcFile.exeSize||" of "||icode.icodeVersion 
+               found := *srcFile.foundFiles
+               if found > 0 then {
+                  if found > 1 then plural := "s are " else plural := " is "
+                  Message ||:=  "\n   "|| found ||" file"||plural||"found"
+                  }
+               missing := *srcFile.missingFiles
+               if missing > 0 then {
+                  if missing > 1 then plural := "s are " else plural := " is "
+                  Message ||:=  "\n   and "|| missing ||" file"||plural||"missing"
+                  }
+               Message ||:= "\n   Type \"help\" for assistance _
+                                  or \"src\" for file(s) name"
+               }
+            else{
+               Message ||:= "\n   Can not get the Source File Names_
+                           \n   Type \"help\" for assistance."
+               Write(Message)
+               State := NONE
+               fail
+               }
+            }
+         else {
+            Message ||:= "\n   Could not access \"" || TP[1] ||"\""||
+                         "\n   Type \"help\" for assistance."
+            Write(Message)
+            State := NONE
+            fail
+            }
+         }
+      Write(Message)
+      return
+      }
+end
+
+method reinitState()
+   srcFile.reinit()
+   #srcCode.reinit()
+   Fresh()
+end
+
+#
+# Puts the last command in the right place in cmdHistory List
+#
+method update_cmdHistory(line)
+   local i
+
+   # cmdHistory[1]=""
+   every i:=2 to *cmdHistory do
+      if line == cmdHistory[i] then{
+         delete(cmdHistory,i)    
+         break
+         }
+   push(cmdHistory,line)
+end
+
+#
+# refresh the debugging state to the default settings
+#
+method Fresh() 
+
+   # Initially, eventMask does not contain the E_Line & E_Assign events
+   # If there is a breakpoint, E_Line will be added to the eventMask,
+   # and the breakpoint linenum will be inserted in valueMask[E_Line] set
+   # Also, initially the eventMask will not contain the E_Assign event
+   # If there is a watchpoint then the E_Assign will be added and the 
+   # variable will be added to the watchMask set.
+ 
+   eventMask       := cset(E_Error || E_Exit || E_Signal ||
+			   E_CoCreate || E_Coact || E_Cofail || E_Coret) 
+   internalMask    :=
+   externalMask    :=
+   traceMask       :=
+   assertEventMask := ''
+
+   valueMask       := table() 
+   assertVars      := set()
+   breakMask       := set()
+   watchChangeMask := set()
+   watchReadMask   := set()
+   assertLoc       := set()
+   cur_Frame       := 0 # the current active frame is the last one
+   cmdHistory      := [""]
+
+
+   MaskTable           := table()
+   MaskTable[E_Line]   := breakMask
+   MaskTable[E_Assign] := watchChangeMask
+   MaskTable[E_Value]  := watchChangeMask
+   MaskTable[E_Snew]   := watchChangeMask
+   MaskTable[E_Spos]   := watchChangeMask
+   MaskTable[E_Deref]  := watchReadMask
+
+   Message         := VERSION||"\n   "
+end
+
+method runtimeErrorMsg()
+   local msg
+   msg := "\n   That action cannot be performed right now. " ||
+          "\n   The program has experienced an error."
+   write(msg)
+end
+
+#
+# Co-expression wrapper functions
+#
+
+# are these really necessary...? makes it more "OO"
+
+method initCoState(tp)
+   return coState.init(tp)
+end
+
+method updateCoState(C)
+   return coState.update_state(C)
+end
+
+method updateCoTarget(x)
+   if x >= 1 then return coState.update_target(x)
+#   else write("not a valid co-expression number")
+end
+
+method addCoexp(C,srcC)
+   return coState.add_coexp(C,srcC)
+end
+
+method removeCoexp(C)
+   if /C then return coState.remove_curr_coexp()
+   else return coState.remove_coexp(C)
+end
+
+method printCoState()
+    return coState.print_state()
+end
+
+#
+# Initialization
+#
+initially()
+   TP        := []
+
+   State     := NONE
+   RunCode   := NONE
+   RunCount  := 0
+
+   icode     := Icode()
+   srcFile   := SourceFile()
+
+   coState   := CoexpState()
+
+   eventMask       := cset(E_Error || E_Exit || E_Signal ||
+			   E_CoCreate || E_Coact || E_Cofail || E_Coret)
+   Fresh()
+end
